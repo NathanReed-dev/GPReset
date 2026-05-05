@@ -1,125 +1,176 @@
 package org.plutonix.gPReset;
 
-import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.WorldCreator;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.plutonix.gPReset.commands.ResetCommand;
+import org.plutonix.gPReset.commands.GPResetCommand;
 import org.plutonix.gPReset.grief.ClaimAdapter;
 import org.plutonix.gPReset.reset.*;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Set;
+import java.util.*;
 
 public class GPReset extends JavaPlugin {
 
     private static final String FLAG_FILE = "reset.flag";
+    private static final String WORLD_FILE = "reset.world";
+
+    private final ClaimAdapter claimAdapter = new ClaimAdapter();
 
     @Override
     public void onEnable() {
-        ClaimAdapter claimAdapter = new ClaimAdapter();
 
-        // Register command safely
-        var cmd = getCommand("resetworld");
+        saveDefaultConfig();
+
+        var command = new GPResetCommand(this);
+        var cmd = getCommand("gpreset");
+
         if (cmd == null) {
-            getLogger().severe("Command 'resetworld' not defined in plugin.yml!");
+            getLogger().severe("Command gpreset not defined in plugin.yml");
             return;
         }
-        cmd.setExecutor(new ResetCommand(this));
 
-        // If flag exists, perform reset BEFORE world is actively used
+        cmd.setExecutor(command);
+        cmd.setTabCompleter(command);
+
+        handleStartupReset();
+
+    }
+
+    private void handleStartupReset() {
         File flag = new File(getDataFolder(), FLAG_FILE);
-        if (flag.exists()) {
-            getLogger().info("Reset flag detected. Performing world reset...");
+        File worldFile = new File(getDataFolder(), WORLD_FILE);
 
-            // pick target world (simple: first world)
-            World world = Bukkit.getWorlds().getFirst();
-            String worldName = world.getName();
+        if (!flag.exists() || !worldFile.exists()) return;
 
-            // Compute protected regions
-            var protectedChunks = claimAdapter.getProtectedChunks(world);
-            var regionCalc = new RegionCalculator();
-            Set<Region> protectedRegions = regionCalc.getProtectedRegions(protectedChunks);
+        try {
+            String worldName = Files.readString(worldFile.toPath()).trim();
+            getLogger().info("Resetting World: " + worldName);
+
+            World world = Bukkit.getWorld(worldName);
+            if(world == null) {
+                world = Bukkit.createWorld(new WorldCreator(worldName));
+            }
+
+            if (world == null) {
+                getLogger().severe("Failed to load world: " + worldName);
+                return;
+            }
 
             // Backup
             backupWorld(world);
 
-            // Unload world to release file handles
+            // Protected Regions
+            var claims = claimAdapter.getProtectedChunks(world);
+            var regionCalc = new RegionCalculator();
+            Set<Region> protectedRegions = regionCalc.getProtectedRegions(claims);
+
+            // Unload World
             Bukkit.unloadWorld(world, true);
 
-            // Delete unprotected regions
+            // Delete Unprotected Regions
             File regionFolder = WorldUtils.getRegionFolder(worldName);
             RegionResetter resetter = new RegionResetter();
             int deleted = resetter.deleteUnprotectedRegions(regionFolder, protectedRegions);
 
             getLogger().info("Deleted regions: " + deleted);
 
-            // Remove flag
+            // Cleanup Flags
             if (!flag.delete()) {
-                getLogger().warning("Failed to delete reset flag file.");
+                getLogger().warning("Could not delete reset.flag");
             }
 
-            // Recreate world
-            Bukkit.createWorld(new org.bukkit.WorldCreator(worldName));
+            if (!worldFile.delete()) {
+                getLogger().warning("Could not delete reset.world");
+            }
+
+            // Reload World
+            Bukkit.createWorld(new WorldCreator(worldName));
 
             getLogger().info("World reset complete.");
+        } catch (Exception e) {
+            getLogger().severe("Reset Failed : " + e.getMessage());
         }
+
     }
 
-    public void markResetFlagAndShutdown() {
+    public void executeReset(String worldName) {
         try {
-            getDataFolder().mkdirs();
-            File flag = new File(getDataFolder(), FLAG_FILE);
-            if (!flag.exists()) {
-                flag.createNewFile();
-            }
+            Files.createDirectories(getDataFolder().toPath());
+
+            Files.writeString(new File(getDataFolder(), WORLD_FILE).toPath(), worldName);
+            Files.createFile(new File(getDataFolder(), FLAG_FILE).toPath());
         } catch (Exception e) {
-            getLogger().severe("Failed to create reset flag: " + e.getMessage());
+            getLogger().severe("Failed to prepare reset: " + e.getMessage());
             return;
         }
 
-        // Kick players with message
         Bukkit.getOnlinePlayers().forEach(p ->
-                p.kick(Component.text("Server is restarting for world reset"))
-        );
+                p.kick(net.kyori.adventure.text.Component.text("Server restarting for world reset: " + worldName)));
 
-        // Shutdown server
         Bukkit.shutdown();
     }
 
-    private void backupWorld(World world) {
-        try {
-            File worldFolder = world.getWorldFolder();
+    private void backupWorld(World world) throws Exception{
+        File worldFolder = world.getWorldFolder();
+        File backupDir = new File(getServer().getWorldContainer(), "backups");
 
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            File backupDir = new File(getServer().getWorldContainer(), "backups");
-            backupDir.mkdirs();
+        Files.createDirectories(backupDir.toPath());
 
-            File backupTarget = new File(backupDir, world.getName() + "_" + timestamp);
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        File backupTarget = new File(backupDir, world.getName() + "_" + timeStamp);
 
-            getLogger().info("Creating world backup...");
+        copyFolder(worldFolder, backupTarget);
 
-            copyFolder(worldFolder, backupTarget);
+        int keep = getConfig().getInt("backup.limit", 5);
+        pruneBackups(backupDir, world.getName(), keep);
 
-            getLogger().info("Backup created at: " + backupTarget.getAbsolutePath());
+        getLogger().info("Backup Created: " + backupTarget.getName());
+    }
 
-        } catch (Exception e) {
-            getLogger().severe("Backup failed: " + e.getMessage());
+    private void pruneBackups(File backupDir, String worldName, int keep) {
+        File[] backups = backupDir.listFiles((d, name) -> name.startsWith(worldName + "_"));
+
+        if (backups == null || backups.length <= keep) return;
+
+        Arrays.sort(backups, Comparator.comparingLong(File::lastModified).reversed());
+
+        getLogger().info("Pruning backups. Found: " + backups.length + ", keeping: " + keep);
+
+        for (int i = keep; i< backups.length; i++) {
+            File backup = backups[i];
+
+            deleteFolder(backup);
+            getLogger().info("Deleted backup: " + backup.getName());
+        }
+    }
+
+    private void deleteFolder(File file) {
+        if (file.isDirectory()) {
+            File[] contents = file.listFiles();
+            if (contents != null) {
+                for (File child : contents) {
+                    deleteFolder(child);
+                }
+            }
+        }
+
+        if (!file.delete()) {
+            getLogger().warning("Failed to delete: " + file.getAbsolutePath());
         }
     }
 
     private void copyFolder(File src, File dest) throws Exception {
         if (src.isDirectory()) {
-            if (!dest.exists()) dest.mkdirs();
-
-            for (String file : src.list()) {
+            Files.createDirectories(dest.toPath());
+            for (String file : Objects.requireNonNull(src.list())) {
                 copyFolder(new File(src, file), new File(dest, file));
             }
         } else {
-            java.nio.file.Files.copy(src.toPath(), dest.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(src.toPath(), dest.toPath());
         }
     }
 }
