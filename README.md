@@ -1,11 +1,19 @@
 # GP-RESET
 
-Nowhere near production...
-Still has to work on :- 
-- World Specification 
-- better backup handling
-- Customisable PlayerActions
-- Optimize Protection Chunks
+A Minecraft Reset Plugin that Respects player claims provided by [Grief Prevention](https://modrinth.com/plugin/griefprevention).
 
-Base Logic Works Claims are being protected and unclaimed spaces outside chunks around the protected claims [**32 x 32**]
-are reset essentially Resetting the world along with the structures.
+
+## Permissions
+
+```gpreset.admin```
+
+## How to Use:-
+
+```
+/gpreset <world name>
+
+# Warning Prompt
+
+/gpreset <world name> confirm
+
+```
