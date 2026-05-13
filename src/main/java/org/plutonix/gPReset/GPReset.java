@@ -4,8 +4,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.plutonix.gPReset.adapter.WorldGuardAdapter;
 import org.plutonix.gPReset.commands.GPResetCommand;
-import org.plutonix.gPReset.grief.ClaimAdapter;
+import org.plutonix.gPReset.adapter.ClaimAdapter;
 import org.plutonix.gPReset.reset.*;
 
 import java.io.File;
@@ -19,6 +20,7 @@ public class GPReset extends JavaPlugin {
     private static final String WORLD_FILE = "reset.world";
 
     private final ClaimAdapter claimAdapter = new ClaimAdapter();
+    private WorldGuardAdapter wgAdapter;
 
     @Override
     public void onEnable() {
@@ -28,6 +30,8 @@ public class GPReset extends JavaPlugin {
         var command = new GPResetCommand(this);
         var cmd = getCommand("gpreset");
 
+        boolean ignoreGlobal = getConfig().getBoolean("world.ignore-global-region", true);
+        wgAdapter = new WorldGuardAdapter(ignoreGlobal);
         if (cmd == null) {
             getLogger().severe("Command gpreset not defined in plugin.yml");
             return;
@@ -67,6 +71,12 @@ public class GPReset extends JavaPlugin {
             var claims = claimAdapter.getProtectedChunks(world);
             var regionCalc = new RegionCalculator();
             Set<Region> protectedRegions = regionCalc.getProtectedRegions(claims);
+
+            if (wgAdapter.isAvailable()) {
+                Set<Region> wgRegion = wgAdapter.getProtectedRegions(world);
+                protectedRegions.addAll(wgRegion);
+                getLogger().info("WorldGuard regions added: " + wgRegion.size());
+            }
 
             // Unload World
             Bukkit.unloadWorld(world, true);
@@ -172,5 +182,29 @@ public class GPReset extends JavaPlugin {
         } else {
             Files.copy(src.toPath(), dest.toPath());
         }
+    }
+
+    public Set<Region> getProtectedRegions(World world) {
+        var claims = claimAdapter.getProtectedChunks(world);
+        var regionCalc = new RegionCalculator();
+
+        Set<Region> protectedRegions = regionCalc.getProtectedRegions(claims);
+
+        if (wgAdapter.isAvailable()) {
+            protectedRegions.addAll(wgAdapter.getProtectedRegions(world));
+        }
+        return protectedRegions;
+    }
+
+    public  int countTotalRegions(World world) {
+        File regionDir = WorldUtils.getRegionFolder(world.getName());
+
+        if (!regionDir.exists()) {
+            return 0;
+        }
+        File[] files = regionDir.listFiles((d, name) ->
+                name.endsWith(".mca"));
+
+        return files == null ? 0 : files.length;
     }
 }

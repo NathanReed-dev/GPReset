@@ -1,5 +1,5 @@
 name: GPReset
-version: 0.1.0
+version: 0.1.2
 main: org.plutonix.gPReset.GPReset
 api-version: 1.21
 author: Nathaniel Reed
@@ -9,7 +9,7 @@ softdepend: [GriefPrevention]
 commands:
   gpreset:
     description: Reset world while preserving claims
-    usage: /gpreset <world> [confirm]
+    usage: /gpreset [command]
     permission: gpreset.admin
 
 permissions:

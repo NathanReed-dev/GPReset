@@ -1,4 +1,4 @@
-package org.plutonix.gPReset.grief;
+package org.plutonix.gPReset.adapter;
 
 import me.ryanhamshire.GriefPrevention.*;
 import org.bukkit.Location;
