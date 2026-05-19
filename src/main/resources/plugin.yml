@@ -4,7 +4,7 @@ main: org.plutonix.gPReset.GPReset
 api-version: 1.21
 author: Nathaniel Reed
 
-softdepend: [GriefPrevention]
+softdepend: [GriefPrevention, WorldGuard]
 
 commands:
   gpreset:

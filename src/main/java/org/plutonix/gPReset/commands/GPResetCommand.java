@@ -178,14 +178,6 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
             return options.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
             }
-
-        if (args.length == 2) {
-            World world = Bukkit.getWorld(args[0]);
-
-            if (world != null) {
-                return Collections.singletonList("confirm");
-            }
-        }
         return Collections.emptyList();
 
     }
