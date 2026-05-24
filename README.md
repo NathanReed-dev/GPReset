@@ -14,10 +14,9 @@ A Minecraft Reset Plugin that Respects player claims provided by [Grief Preventi
 ## How to Use:-
 
 ```
+/gpreset help
+/gpreset preview
 /gpreset <world name>
-
-# Warning Prompt
-
-/gpreset <world name> confirm
+/gpreset reload
 
 ```
