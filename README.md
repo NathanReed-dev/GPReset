@@ -1,6 +1,6 @@
 # GP-RESET
 
-A Minecraft Reset Plugin that Respects player claims provided by [Grief Prevention](https://modrinth.com/plugin/griefprevention).
+A Minecraft Reset Plugin that Respects Protected Spaces provided by WorldGuard, GriefPrevention.
 
 # Plan
 
@@ -20,3 +20,15 @@ A Minecraft Reset Plugin that Respects player claims provided by [Grief Preventi
 /gpreset reload
 
 ```
+
+## Plans and Done
+- Made the Plugin Scalable and Modularized now it is a universal Reset Plugin.
+- Now It does it's base function of reset, generate backups etc. and will check for protected regions ignore if the supported Plugins are added.
+
+
+## Supported Plugins
+- [GriefPrevention](https://modrinth.com/plugin/griefprevention)
+- [WorldGuard](https://modrinth.com/plugin/worldguard)
+- To be added
+- Suggestions are welcomed!
+
