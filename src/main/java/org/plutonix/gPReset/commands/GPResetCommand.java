@@ -82,8 +82,8 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length == 1) {
-            World world = Bukkit.getWorld(args[0]);
+        if (args.length == 2 && args[0].equalsIgnoreCase("reset")) {
+            World world = Bukkit.getWorld(args[1]);
 
             List<String> blacklist = plugin.getConfig().getStringList("worlds.blacklist");
 
@@ -161,9 +161,8 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             List<String> options = new ArrayList<>();
 
-            Bukkit.getWorlds().forEach(w -> options.add(w.getName()));
-
             options.add("reload");
+            options.add("reset");
             options.add("preview");
             options.add("help");
 
@@ -178,6 +177,14 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
             return options.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
             }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("reset")) {
+            List<String> options = new ArrayList<>();
+            Bukkit.getWorlds().forEach(w -> options.add(w.getName()));
+
+            return options.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
+        }
+
         return Collections.emptyList();
 
     }
