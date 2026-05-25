@@ -16,7 +16,7 @@ A Minecraft Reset Plugin that Respects Protected Spaces provided by WorldGuard, 
 ```
 /gpreset help
 /gpreset preview
-/gpreset <world name>
+/gpreset reset <world name>
 /gpreset reload
 
 ```

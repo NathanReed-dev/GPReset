@@ -6,7 +6,7 @@
 
     <groupId>org.plutonix</groupId>
     <artifactId>gpreset</artifactId>
-    <version>0.1.2</version>
+    <version>0.1.4</version>
     <packaging>jar</packaging>
 
     <name>gpreset</name>
