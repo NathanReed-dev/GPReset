@@ -4,9 +4,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.plutonix.gPReset.adapter.WorldGuardAdapter;
 import org.plutonix.gPReset.commands.GPResetCommand;
-import org.plutonix.gPReset.adapter.ClaimAdapter;
+import org.plutonix.gPReset.provider.ProtectionProvider;
+import org.plutonix.gPReset.provider.GriefPreventionProvider;
+import org.plutonix.gPReset.provider.WorldGuardProvider;
 import org.plutonix.gPReset.reset.*;
 
 import java.io.File;
@@ -19,8 +20,7 @@ public class GPReset extends JavaPlugin {
     private static final String FLAG_FILE = "reset.flag";
     private static final String WORLD_FILE = "reset.world";
 
-    private final ClaimAdapter claimAdapter = new ClaimAdapter();
-    private WorldGuardAdapter wgAdapter;
+    private final List<ProtectionProvider> protectionProviders = new ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -30,8 +30,11 @@ public class GPReset extends JavaPlugin {
         var command = new GPResetCommand(this);
         var cmd = getCommand("gpreset");
 
-        boolean ignoreGlobal = getConfig().getBoolean("world.ignore-global-region", true);
-        wgAdapter = new WorldGuardAdapter(ignoreGlobal);
+        registerProviders(new GriefPreventionProvider());
+        registerProviders(new WorldGuardProvider(
+                getConfig().getBoolean("world.ignore-global-region", true)
+        ));
+
         if (cmd == null) {
             getLogger().severe("Command gpreset not defined in plugin.yml");
             return;
@@ -68,15 +71,7 @@ public class GPReset extends JavaPlugin {
             backupWorld(world);
 
             // Protected Regions
-            var claims = claimAdapter.getProtectedChunks(world);
-            var regionCalc = new RegionCalculator();
-            Set<Region> protectedRegions = regionCalc.getProtectedRegions(claims);
-
-            if (wgAdapter.isAvailable()) {
-                Set<Region> wgRegion = wgAdapter.getProtectedRegions(world);
-                protectedRegions.addAll(wgRegion);
-                getLogger().info("WorldGuard regions added: " + wgRegion.size());
-            }
+            Set<Region> protectedRegions = getProtectedRegions(world);
 
             // Unload World
             Bukkit.unloadWorld(world, true);
@@ -184,15 +179,25 @@ public class GPReset extends JavaPlugin {
         }
     }
 
+    private void registerProviders(ProtectionProvider provider) {
+        protectionProviders.add(provider);
+        getLogger().info("Registered providers: " + provider.getName());
+    }
+
     public Set<Region> getProtectedRegions(World world) {
-        var claims = claimAdapter.getProtectedChunks(world);
-        var regionCalc = new RegionCalculator();
+        Set<Region> protectedRegions = new HashSet<>();
 
-        Set<Region> protectedRegions = regionCalc.getProtectedRegions(claims);
+        for  (ProtectionProvider provider : protectionProviders) {
+            if (!provider.isEnabled()) {
+                continue;
+            }
 
-        if (wgAdapter.isAvailable()) {
-            protectedRegions.addAll(wgAdapter.getProtectedRegions(world));
+            Set<Region> regions = provider.getProtectedRegions(world);
+
+            protectedRegions.addAll(regions);
+            getLogger().info(provider.getName() + " protected: " + regions.size());
         }
+
         return protectedRegions;
     }
 
