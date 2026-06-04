@@ -48,7 +48,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 1 &&  args[0].equalsIgnoreCase("help")) {
             sender.sendMessage(Msg.info("Commands :- "));
-            sender.sendMessage(Msg.info("/gpreset <world>"));
+            sender.sendMessage(Msg.info("/gpreset reset <world>"));
             sender.sendMessage(Msg.info("/gpreset preview <world>"));
             sender.sendMessage(Msg.info("/gpreset reload"));
             sender.sendMessage(Msg.info("/gpreset help"));
@@ -103,7 +103,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             }
 
             Pending p = new Pending();
-            p.world = args[0];
+            p.world = args[1];
             p.timestamp = System.currentTimeMillis();
 
             pending.put(player.getUniqueId(), p);
@@ -111,12 +111,12 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             long timeout = plugin.getConfig().getLong("reset.confirmation-timeout-seconds");
 
             player.sendMessage(Msg.hWarn("Warning"));
-            player.sendMessage(Msg.info("World: " + args[0]));
+            player.sendMessage(Msg.info("World: " + args[1]));
             player.sendMessage(Msg.info("Backup will be created."));
             player.sendMessage(Msg.error("Unclaimed regions will be reset."));
             player.sendMessage(Msg.hInfo("Players will be kicked and the Server will shut down."));
             player.sendMessage(Msg.raw(
-                    "<green><underlined><bold><shadow:dark_green><click:run_command:'/gpreset "+ args[0] + " confirm'>CONFIRM</click></shadow></bold></underlined></green> " +
+                    "<green><underlined><bold><shadow:dark_green><click:run_command:'/gpreset reset "+ args[1] + " confirm'>CONFIRM</click></shadow></bold></underlined></green> " +
                             " <red><underlined><bold><shadow:dark_red><click:run_command:'/gpreset deny'>DENY</click></shadow></bold></underlined></red>"
             ));
 
@@ -126,11 +126,11 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
 
 
-        if (args.length == 2 && args[1].equalsIgnoreCase("confirm")) {
+        if (args.length == 3 && args[2].equalsIgnoreCase("confirm")) {
 
             Pending p = pending.get(player.getUniqueId());
 
-            if (p == null || !p.world.equals(args[0])) {
+            if (p == null || !p.world.equals(args[1])) {
                 player.sendMessage(Msg.error("Invalid Confirmation."));
                 return true;
             }
@@ -146,7 +146,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
         }
 
-        player.sendMessage("Usage: /gpreset <world> [confirm]");
+        player.sendMessage("Usage: /gpreset reset <world> [confirm]");
         return true;
 
     }
