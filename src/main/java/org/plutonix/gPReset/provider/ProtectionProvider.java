@@ -10,5 +10,4 @@ public interface ProtectionProvider {
     String getName();
     boolean isEnabled();
     Set<Region> getProtectedRegions(World world);
-
 }

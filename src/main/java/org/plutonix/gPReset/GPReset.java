@@ -30,6 +30,7 @@ public class GPReset extends JavaPlugin {
         var command = new GPResetCommand(this);
         var cmd = getCommand("gpreset");
 
+        protectionProviders.clear();
         registerProviders(new GriefPreventionProvider());
         registerProviders(new WorldGuardProvider(
                 getConfig().getBoolean("world.ignore-global-region", true)
@@ -179,9 +180,17 @@ public class GPReset extends JavaPlugin {
         }
     }
 
-    private void registerProviders(ProtectionProvider provider) {
-        protectionProviders.add(provider);
-        getLogger().info("Registered providers: " + provider.getName());
+    public void registerProviders(ProtectionProvider provider) {
+        if (protectionProviders.stream().noneMatch(p -> p.getName().equals(provider.getName()))) {
+            protectionProviders.add(provider);
+            getLogger().info("Registered providers: " + provider.getName());
+        } else {
+            getLogger().severe("Provider: " + provider.getName() + " already registered!");
+        }
+    }
+
+    public List<ProtectionProvider> getProtectionProviders() {
+        return protectionProviders;
     }
 
     public Set<Region> getProtectedRegions(World world) {

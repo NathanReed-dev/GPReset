@@ -1,20 +1,24 @@
 package org.plutonix.gPReset.commands;
 
+import com.sk89q.worldedit.WorldEdit;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.plutonix.gPReset.GPReset;
+import org.plutonix.gPReset.provider.ProtectionProvider;
 import org.plutonix.gPReset.reset.Region;
 import org.plutonix.gPReset.util.Msg;
-import org.stringtemplate.v4.ST;
+import org.plutonix.gPReset.provider.GriefPreventionProvider;
+import org.plutonix.gPReset.provider.WorldGuardProvider;
 
 import java.util.*;
 
 public class GPResetCommand implements CommandExecutor, TabCompleter {
 
     private final GPReset plugin;
+    private final List<ProtectionProvider> protectionProviders = new ArrayList<>();
 
     private static class Pending {
         String world;
@@ -62,18 +66,37 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length == 2 && args[0].equalsIgnoreCase("preview")) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("preview")) {
+
+
+
             World world = Bukkit.getWorld(args[1]);
 
             if (world == null) {
                 player.sendMessage(Msg.error("World not found."));
                 return true;
             }
+
             int total = plugin.countTotalRegions(world);
             Set<Region> protectedRegion = plugin.getProtectedRegions(world);
 
             int protectedCount = protectedRegion.size();
             int deleting = Math.max(0, total - protectedCount);
+
+            if (args.length == 3 &&  (args[2].equalsIgnoreCase("--verbose") || args[2].equalsIgnoreCase("-v"))) {
+                player.sendMessage(Msg.warn("Preview for: " + world.getName() + " Verbose mode"));
+                player.sendMessage(Msg.info("Total regions: " + total));
+                player.sendMessage(Msg.info("Protected Regions: " + protectedCount));
+                player.sendMessage(Msg.info("Deleting regions: " + deleting));
+                plugin.registerProviders(new GriefPreventionProvider());
+                plugin.registerProviders(new WorldGuardProvider(plugin.getConfig().getBoolean("world.ignore-global-region", true)));
+                for (ProtectionProvider provider : plugin.getProtectionProviders()) {
+                    if(!provider.isEnabled()) { continue; }
+                    Set<Region> regions = provider.getProtectedRegions(world);
+                    player.sendMessage(Msg.info(provider.getName() + ": " + regions.size()));
+                }
+                return true;
+            }
 
             player.sendMessage(Msg.warn("Preview for world: " + world.getName()));
             player.sendMessage(Msg.info("Total regions: " + total));
@@ -82,7 +105,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length == 2 && args[0].equalsIgnoreCase("reset")) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("reset")) {
             World world = Bukkit.getWorld(args[1]);
 
             List<String> blacklist = plugin.getConfig().getStringList("worlds.blacklist");
@@ -110,6 +133,26 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
             long timeout = plugin.getConfig().getLong("reset.confirmation-timeout-seconds");
 
+            if (args.length == 3 && args[2].equalsIgnoreCase("confirm")) {
+
+                Pending pen = pending.get(player.getUniqueId());
+
+                if (pen == null || !pen.world.equals(args[1])) {
+                    player.sendMessage(Msg.error("Invalid Confirmation."));
+                    return true;
+                }
+
+                if (System.currentTimeMillis() - p.timestamp > getTimeout()) {
+                    pending.remove(player.getUniqueId());
+                    player.sendMessage(Msg.error("Confirmation expired."));
+                    return true;
+                }
+
+                plugin.executeReset(p.world);
+                return true;
+
+            }
+
             player.sendMessage(Msg.hWarn("Warning"));
             player.sendMessage(Msg.info("World: " + args[1]));
             player.sendMessage(Msg.info("Backup will be created."));
@@ -121,29 +164,6 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             ));
 
             return true;
-        }
-
-
-
-
-        if (args.length == 3 && args[2].equalsIgnoreCase("confirm")) {
-
-            Pending p = pending.get(player.getUniqueId());
-
-            if (p == null || !p.world.equals(args[1])) {
-                player.sendMessage(Msg.error("Invalid Confirmation."));
-                return true;
-            }
-
-            if (System.currentTimeMillis() - p.timestamp > getTimeout()) {
-                pending.remove(player.getUniqueId());
-                player.sendMessage(Msg.error("Confirmation expired."));
-                return true;
-            }
-
-            plugin.executeReset(p.world);
-            return true;
-
         }
 
         player.sendMessage("Usage: /gpreset reset <world> [confirm]");
@@ -174,7 +194,6 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
         if (args.length == 2 && args[0].equalsIgnoreCase("preview")) {
             List<String> options = new ArrayList<>();
             Bukkit.getWorlds().forEach(w -> options.add(w.getName()));
-
             return options.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
             }
 

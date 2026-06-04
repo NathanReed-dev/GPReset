@@ -35,7 +35,7 @@ public class WorldGuardProvider implements ProtectionProvider {
                 .getPlatform()
                 .getRegionContainer()
                 .get(BukkitAdapter.adapt(world));
-        if (manager != null) {
+        if (manager == null) {
             return  regions;
         }
 
