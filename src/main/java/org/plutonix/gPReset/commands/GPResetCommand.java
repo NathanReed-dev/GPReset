@@ -50,7 +50,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1 &&  args[0].equalsIgnoreCase("help")) {
             sender.sendMessage(Msg.info("Commands :- "));
             sender.sendMessage(Msg.info("/gpreset reset <world>"));
-            sender.sendMessage(Msg.info("/gpreset preview <world>"));
+            sender.sendMessage(Msg.info("/gpreset audit <world>"));
             sender.sendMessage(Msg.info("/gpreset reload"));
             sender.sendMessage(Msg.info("/gpreset help"));
             return true;
