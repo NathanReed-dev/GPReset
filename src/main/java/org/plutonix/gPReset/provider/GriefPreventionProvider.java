@@ -33,6 +33,7 @@ public class GriefPreventionProvider implements ProtectionProvider {
         for (Claim claim : gp.dataStore.getClaims()) {
             Location lesser = claim.getLesserBoundaryCorner();
             Location greater = claim.getGreaterBoundaryCorner();
+            String owner = claim.ownerID.toString();
 
             if (!lesser.getWorld().equals(world)) continue;
 

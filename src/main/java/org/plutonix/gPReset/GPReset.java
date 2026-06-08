@@ -4,15 +4,17 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.plutonix.gPReset.audit.Audit;
+import org.plutonix.gPReset.backup.BackupManager;
 import org.plutonix.gPReset.commands.GPResetCommand;
-import org.plutonix.gPReset.provider.ProtectionProvider;
+import org.plutonix.gPReset.provider.ProtectionManager;
 import org.plutonix.gPReset.provider.GriefPreventionProvider;
 import org.plutonix.gPReset.provider.WorldGuardProvider;
 import org.plutonix.gPReset.reset.*;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.text.SimpleDateFormat;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 public class GPReset extends JavaPlugin {
@@ -20,21 +22,25 @@ public class GPReset extends JavaPlugin {
     private static final String FLAG_FILE = "reset.flag";
     private static final String WORLD_FILE = "reset.world";
 
-    private final List<ProtectionProvider> protectionProviders = new ArrayList<>();
+    private ProtectionManager protectionManager;
+    private BackupManager backupManager;
+    private Audit audit;
 
     @Override
     public void onEnable() {
 
         saveDefaultConfig();
 
+        protectionManager = new ProtectionManager();
+        protectionManager.register(new GriefPreventionProvider());
+        protectionManager.register(new WorldGuardProvider(getConfig().getBoolean("world.ignore-global-region", true)));
+
+        backupManager = new BackupManager(this);
+
+        audit = new Audit(protectionManager, backupManager);
+
         var command = new GPResetCommand(this);
         var cmd = getCommand("gpreset");
-
-        protectionProviders.clear();
-        registerProviders(new GriefPreventionProvider());
-        registerProviders(new WorldGuardProvider(
-                getConfig().getBoolean("world.ignore-global-region", true)
-        ));
 
         if (cmd == null) {
             getLogger().severe("Command gpreset not defined in plugin.yml");
@@ -68,11 +74,10 @@ public class GPReset extends JavaPlugin {
                 return;
             }
 
-            // Backup
-            backupWorld(world);
+            Set<Region> protectedRegions = protectionManager.getProtectedRegions(world);
 
-            // Protected Regions
-            Set<Region> protectedRegions = getProtectedRegions(world);
+            // Backup
+            backupManager.backupWorld(world);
 
             // Unload World
             Bukkit.unloadWorld(world, true);
@@ -103,12 +108,22 @@ public class GPReset extends JavaPlugin {
 
     }
 
+    public BackupManager getBackupManager() {return backupManager;}
+    public ProtectionManager getProtectionManager() {return protectionManager;}
+    public Audit getAudit() {return audit;}
+
     public void executeReset(String worldName) {
         try {
             Files.createDirectories(getDataFolder().toPath());
 
-            Files.writeString(new File(getDataFolder(), WORLD_FILE).toPath(), worldName);
-            Files.createFile(new File(getDataFolder(), FLAG_FILE).toPath());
+            File worldFile =  new File(getDataFolder(), WORLD_FILE);
+            File flag = new File(getDataFolder(), FLAG_FILE);
+
+            Files.writeString(worldFile.toPath(), worldName, StandardOpenOption.CREATE,  StandardOpenOption.TRUNCATE_EXISTING);
+
+            if (!flag.exists()) {
+                Files.createFile(flag.toPath());
+            }
         } catch (Exception e) {
             getLogger().severe("Failed to prepare reset: " + e.getMessage());
             return;
@@ -116,98 +131,7 @@ public class GPReset extends JavaPlugin {
 
         Bukkit.getOnlinePlayers().forEach(p ->
                 p.kick(net.kyori.adventure.text.Component.text("Server restarting for world reset: " + worldName)));
-
         Bukkit.shutdown();
-    }
-
-    private void backupWorld(World world) throws Exception{
-        File worldFolder = world.getWorldFolder();
-        File backupDir = new File(getServer().getWorldContainer(), "backups");
-
-        Files.createDirectories(backupDir.toPath());
-
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File backupTarget = new File(backupDir, world.getName() + "_" + timeStamp);
-
-        copyFolder(worldFolder, backupTarget);
-
-        int keep = getConfig().getInt("backup.limit", 5);
-        pruneBackups(backupDir, world.getName(), keep);
-
-        getLogger().info("Backup Created: " + backupTarget.getName());
-    }
-
-    private void pruneBackups(File backupDir, String worldName, int keep) {
-        File[] backups = backupDir.listFiles((d, name) -> name.startsWith(worldName + "_"));
-
-        if (backups == null || backups.length <= keep) return;
-
-        Arrays.sort(backups, Comparator.comparingLong(File::lastModified).reversed());
-
-        getLogger().info("Pruning backups. Found: " + backups.length + ", keeping: " + keep);
-
-        for (int i = keep; i< backups.length; i++) {
-            File backup = backups[i];
-
-            deleteFolder(backup);
-            getLogger().info("Deleted backup: " + backup.getName());
-        }
-    }
-
-    private void deleteFolder(File file) {
-        if (file.isDirectory()) {
-            File[] contents = file.listFiles();
-            if (contents != null) {
-                for (File child : contents) {
-                    deleteFolder(child);
-                }
-            }
-        }
-
-        if (!file.delete()) {
-            getLogger().warning("Failed to delete: " + file.getAbsolutePath());
-        }
-    }
-
-    private void copyFolder(File src, File dest) throws Exception {
-        if (src.isDirectory()) {
-            Files.createDirectories(dest.toPath());
-            for (String file : Objects.requireNonNull(src.list())) {
-                copyFolder(new File(src, file), new File(dest, file));
-            }
-        } else {
-            Files.copy(src.toPath(), dest.toPath());
-        }
-    }
-
-    public void registerProviders(ProtectionProvider provider) {
-        if (protectionProviders.stream().noneMatch(p -> p.getName().equals(provider.getName()))) {
-            protectionProviders.add(provider);
-            getLogger().info("Registered providers: " + provider.getName());
-        } else {
-            getLogger().severe("Provider: " + provider.getName() + " already registered!");
-        }
-    }
-
-    public List<ProtectionProvider> getProtectionProviders() {
-        return protectionProviders;
-    }
-
-    public Set<Region> getProtectedRegions(World world) {
-        Set<Region> protectedRegions = new HashSet<>();
-
-        for  (ProtectionProvider provider : protectionProviders) {
-            if (!provider.isEnabled()) {
-                continue;
-            }
-
-            Set<Region> regions = provider.getProtectedRegions(world);
-
-            protectedRegions.addAll(regions);
-            getLogger().info(provider.getName() + " protected: " + regions.size());
-        }
-
-        return protectedRegions;
     }
 
     public  int countTotalRegions(World world) {

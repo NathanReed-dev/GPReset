@@ -1,17 +1,14 @@
 package org.plutonix.gPReset.commands;
 
-import com.sk89q.worldedit.WorldEdit;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.plutonix.gPReset.GPReset;
+import org.plutonix.gPReset.audit.AuditResult;
 import org.plutonix.gPReset.provider.ProtectionProvider;
-import org.plutonix.gPReset.reset.Region;
 import org.plutonix.gPReset.util.Msg;
-import org.plutonix.gPReset.provider.GriefPreventionProvider;
-import org.plutonix.gPReset.provider.WorldGuardProvider;
 
 import java.util.*;
 
@@ -66,42 +63,51 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length >= 2 && args[0].equalsIgnoreCase("preview")) {
-
-
-
+        if (args.length == 2 && args[0].equalsIgnoreCase("audit")) {
             World world = Bukkit.getWorld(args[1]);
-
             if (world == null) {
-                player.sendMessage(Msg.error("World not found."));
+                player.sendMessage(Msg.error("World Not Found."));
                 return true;
             }
+            AuditResult result = plugin.getAudit().audit(world);
+            player.sendMessage(Msg.info(""));
+            player.sendMessage(Msg.hInfo("==== GPReset Audit ==="));
+            player.sendMessage(Msg.info(""));
+            player.sendMessage(Msg.info("World: " + world.getName()));
+            player.sendMessage(Msg.info("RegionFiles: " + result.regionFiles()));
+            player.sendMessage(Msg.info(""));
+            player.sendMessage(Msg.hInfo("Protection Providers:"));
+            for (ProtectionProvider provider : plugin.getProtectionManager().getProviders()) {
+                String status = provider.isEnabled() ? "Enabled" : "Disabled";
 
-            int total = plugin.countTotalRegions(world);
-            Set<Region> protectedRegion = plugin.getProtectedRegions(world);
+                player.sendMessage(Msg.raw("<gray>- " + provider.getName() + " : </gray>" + status));
+            }
+            player.sendMessage(Msg.hInfo(""));
+            player.sendMessage(Msg.hInfo("Protected Regions:"));
+            result.protectedRegions().forEach((name, count) -> player.sendMessage(Msg.info("- " + name + " : " + count)));
+            player.sendMessage(Msg.info("- Total Protected Regions:" + result.allRegions()));
 
-            int protectedCount = protectedRegion.size();
-            int deleting = Math.max(0, total - protectedCount);
+            player.sendMessage(Msg.hInfo(""));
+            player.sendMessage(Msg.hInfo("Deletion Estimate: "));
+            player.sendMessage(Msg.info("- Protected: " + result.allRegions()));
+            player.sendMessage(Msg.info("- Deleting: " + result.deletingRegions()));
 
-            if (args.length == 3 &&  (args[2].equalsIgnoreCase("--verbose") || args[2].equalsIgnoreCase("-v"))) {
-                player.sendMessage(Msg.warn("Preview for: " + world.getName() + " Verbose mode"));
-                player.sendMessage(Msg.info("Total regions: " + total));
-                player.sendMessage(Msg.info("Protected Regions: " + protectedCount));
-                player.sendMessage(Msg.info("Deleting regions: " + deleting));
-                plugin.registerProviders(new GriefPreventionProvider());
-                plugin.registerProviders(new WorldGuardProvider(plugin.getConfig().getBoolean("world.ignore-global-region", true)));
-                for (ProtectionProvider provider : plugin.getProtectionProviders()) {
-                    if(!provider.isEnabled()) { continue; }
-                    Set<Region> regions = provider.getProtectedRegions(world);
-                    player.sendMessage(Msg.info(provider.getName() + ": " + regions.size()));
-                }
-                return true;
+            player.sendMessage(Msg.hInfo(""));
+            player.sendMessage(Msg.hInfo("Backup Settings: "));
+            player.sendMessage(Msg.info("- Keep Limit: " + result.backupLimit()));
+            player.sendMessage(Msg.info("- Backup Directory: " + result.backupDirectory().getAbsolutePath()));
+
+            player.sendMessage(Msg.hInfo(""));
+            player.sendMessage(Msg.hInfo("Global Regions: "));
+            player.sendMessage(Msg.info("- Ignored: " + result.ignoreGlobalRegion()));
+
+            player.sendMessage(Msg.hInfo(""));
+            if (result.deletingRegions() > 0) {
+                player.sendMessage(Msg.raw("<bold><gray>Result: </gray></bold><green>Reset Allowed</green>"));
+            }else {
+                player.sendMessage(Msg.raw("<bold><gray>Result: </gray></bold><red>Nothing to be Deleted</red>"));
             }
 
-            player.sendMessage(Msg.warn("Preview for world: " + world.getName()));
-            player.sendMessage(Msg.info("Total regions: " + total));
-            player.sendMessage(Msg.info("Protected regions: " + protectedCount));
-            player.sendMessage(Msg.info("Regions to delete: " + deleting));
             return true;
         }
 
@@ -183,7 +189,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
 
             options.add("reload");
             options.add("reset");
-            options.add("preview");
+            options.add("audit");
             options.add("help");
 
             return options.stream().filter(s -> s.toLowerCase()
@@ -191,7 +197,7 @@ public class GPResetCommand implements CommandExecutor, TabCompleter {
                     .toList();
         }
 
-        if (args.length == 2 && args[0].equalsIgnoreCase("preview")) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("audit")) {
             List<String> options = new ArrayList<>();
             Bukkit.getWorlds().forEach(w -> options.add(w.getName()));
             return options.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();

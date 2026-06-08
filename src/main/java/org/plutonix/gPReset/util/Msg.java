@@ -8,7 +8,7 @@ public class Msg {
     private static final String PREFIX = "<gray>[<yellow>GP Reset</yellow>]</gray> ";
 
     public static Component raw(String msg) {
-        return mm.deserialize(msg);
+        return mm.deserialize(PREFIX + msg);
     }
     public static Component error (String msg) { return mm.deserialize(PREFIX + "<red>" + msg + "</red>"); }
     public static Component hError(String msg) {
